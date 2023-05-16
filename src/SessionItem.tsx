@@ -1,21 +1,18 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
     ListItemText, ListItemAvatar, MenuItem, Divider,
     Avatar, IconButton, Button, TextField, Popper, Fade, Typography, ListItemIcon,
 } from '@mui/material';
-import DeleteIcon from '@mui/icons-material/Delete';
 import { Session } from './types'
 import FileCopyIcon from '@mui/icons-material/FileCopy';
 import EditIcon from '@mui/icons-material/Edit';
-import CheckIcon from '@mui/icons-material/Check';
-import CloseIcon from '@mui/icons-material/Close';
 import ChatBubbleOutlineOutlinedIcon from '@mui/icons-material/ChatBubbleOutlineOutlined';
 import MoreHorizOutlinedIcon from '@mui/icons-material/MoreHorizOutlined';
 import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
 import StyledMenu from './StyledMenu';
 import { useTranslation } from "react-i18next";
-
-const { useState } = React
+import StarIcon from '@mui/icons-material/Star';
+import StarOutlineIcon from '@mui/icons-material/StarOutline';
 
 export interface Props {
     session: Session
@@ -23,15 +20,18 @@ export interface Props {
     switchMe: () => void
     deleteMe: () => void
     copyMe: () => void
+    switchStarred: () => void
     editMe: () => void
 }
 
 export default function SessionItem(props: Props) {
     const { t } = useTranslation()
-    const { session, selected, switchMe, deleteMe, copyMe, editMe } = props
+    const { session, selected, switchMe, deleteMe, copyMe, switchStarred, editMe } = props
+    const [hovering, setHovering] = useState(false)
     const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
     const open = Boolean(anchorEl);
     const handleClick = (event: React.MouseEvent<HTMLElement>) => {
+        event.stopPropagation()
         event.preventDefault()
         setAnchorEl(event.currentTarget);
     };
@@ -40,10 +40,20 @@ export default function SessionItem(props: Props) {
     };
 
     return (
+        <>
         <MenuItem
             key={session.id}
             selected={selected}
             onClick={() => switchMe()}
+            onMouseEnter={() => {
+                setHovering(true)
+            }}
+            onMouseOver={() => {
+                setHovering(true)
+            }}
+            onMouseLeave={() => {
+                setHovering(false)
+            }}
         >
             <ListItemIcon>
                 <IconButton><ChatBubbleOutlineOutlinedIcon fontSize="small" /></IconButton>
@@ -53,10 +63,21 @@ export default function SessionItem(props: Props) {
                     {session.name}
                 </Typography>
             </ListItemText>
-            <IconButton onClick={handleClick}>
-                <MoreHorizOutlinedIcon />
-            </IconButton>
-            <StyledMenu
+            {
+                <IconButton onClick={handleClick} sx={{ color: 'primary.main' }} >
+                    {
+                        session.starred ? (
+                            <StarIcon fontSize="small" />
+                        ) : (
+                            hovering && (
+                                <MoreHorizOutlinedIcon fontSize="small" />
+                            )
+                        )
+                    }
+                </IconButton>
+            }
+        </MenuItem>
+        <StyledMenu
                 MenuListProps={{
                     'aria-labelledby': 'long-button',
                 }}
@@ -79,6 +100,24 @@ export default function SessionItem(props: Props) {
                     <FileCopyIcon fontSize='small' />
                     {t('copy')}
                 </MenuItem>
+                <MenuItem key={session.id + 'star'} onClick={() => {
+                    switchStarred()
+                    handleClose()
+                }} disableRipple>
+                    {
+                        session.starred ? (
+                            <>
+                                <StarOutlineIcon fontSize="small" />
+                                {t('unstar')}
+                            </>
+                        ) : (
+                            <>
+                                <StarIcon fontSize="small" />
+                                {t('star')}
+                            </>
+                        )
+                    }
+                </MenuItem>
 
                 <Divider sx={{ my: 0.5 }} />
 
@@ -93,6 +132,6 @@ export default function SessionItem(props: Props) {
                 </MenuItem>
 
             </StyledMenu>
-        </MenuItem>
+        </>
     )
 }

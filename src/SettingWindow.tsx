@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-    Button, Alert,
+    Button, Alert, Chip,
     Dialog, DialogContent, DialogActions, DialogTitle, DialogContentText, TextField,
     FormGroup, FormControlLabel, Switch, Select, MenuItem, FormControl, InputLabel, Slider, Typography, Box,
 } from '@mui/material';
@@ -14,7 +14,9 @@ import MuiAccordionDetails from '@mui/material/AccordionDetails';
 import MuiAccordion, { AccordionProps } from '@mui/material/Accordion';
 import MuiAccordionSummary, { AccordionSummaryProps } from '@mui/material/AccordionSummary';
 import ArrowForwardIosSharpIcon from '@mui/icons-material/ArrowForwardIosSharp';
-import { useTranslation } from 'react-i18next'
+import { Trans, useTranslation } from 'react-i18next'
+import PlaylistAddCheckCircleIcon from '@mui/icons-material/PlaylistAddCheckCircle';
+import LightbulbCircleIcon from '@mui/icons-material/LightbulbCircle';
 
 const { useEffect } = React
 const models: string[] = ['gpt-3.5-turbo', 'gpt-3.5-turbo-0301', 'gpt-4', 'gpt-4-0314', 'gpt-4-32k', 'gpt-4-32k-0314'];
@@ -46,6 +48,13 @@ export default function SettingWindow(props: Props) {
             setSettingsEdit({ ...settingsEdit, maxContextSize: 'inf' });
         } else {
             setSettingsEdit({ ...settingsEdit, maxContextSize: newValue.toString() });
+        }
+    };
+    const handleTemperatureChange = (event: Event, newValue: number | number[], activeThumb: number) => {
+        if (typeof newValue === 'number') {
+            setSettingsEdit({ ...settingsEdit, temperature: newValue });
+        } else {
+            setSettingsEdit({ ...settingsEdit, temperature: newValue[activeThumb] });
         }
     };
     const handleRepliesTokensInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -89,7 +98,7 @@ export default function SettingWindow(props: Props) {
         setSettingsEdit(props.settings)
 
         // need to restore the previous theme
-        setMode(props.settings.theme || ThemeMode.System);
+        setMode(props.settings.theme ?? ThemeMode.System);
     }
 
     // preview theme
@@ -134,6 +143,24 @@ export default function SettingWindow(props: Props) {
                     <span style={{ marginRight: 10 }}>{t('theme')}</span>
                     <ThemeChangeButton value={settingsEdit.theme} onChange={theme => changeModeWithPreview(theme)} />
                 </FormControl>
+                <FormControl sx={{ m: 1, minWidth: 120 }} size="small">
+                    <InputLabel>Font Size</InputLabel>
+                    <Select
+                        labelId="select-font-size"
+                        value={settingsEdit.fontSize}
+                        label="FontSize"
+                        onChange={(event) => {
+                            setSettingsEdit({ ...settingsEdit, fontSize: event.target.value as number })
+                        }}
+                    >
+                        {
+                            [12, 13, 14, 15, 16, 17, 18].map((size) => (
+                                <MenuItem key={size} value={size}>{size}px</MenuItem>
+                            ))
+                        }
+                    </Select>
+                </FormControl>
+
                 <FormGroup>
                     <FormControlLabel control={<Switch />}
                         label={t('show word count')}
@@ -166,8 +193,7 @@ export default function SettingWindow(props: Props) {
                         {
                             !settingsEdit.apiHost.match(/^(https?:\/\/)?api.openai.com(:\d+)?$/) && (
                                 <Alert severity="warning">
-                                    {t('your api key and all messages will be sent to')} <b>{settingsEdit.apiHost}</b>.
-                                    {t('please confirm that you trust this address. otherwise, there is a risk of api key and data leakage.')}
+                                    {t('proxy warning', {apiHost:settingsEdit.apiHost })}
                                     <Button onClick={() => setSettingsEdit({ ...settingsEdit, apiHost: getDefaultSettings().apiHost })}>{t('reset')}</Button>
                                 </Alert>
                             )
@@ -175,15 +201,20 @@ export default function SettingWindow(props: Props) {
                         {
                             settingsEdit.apiHost.startsWith('http://') && (
                                 <Alert severity="warning">
-                                    {t('all data transfers are being conducted through the')} <b>{t('http')}</b> {t('protocol, which may lead to the risk of api key and data leakage.')}
-                                    {t('unless you are completely certain and understand the potential risks involved, please consider using the')} <b>{t('https')}</b> {t('protocol instead.')}
+                                    {<Trans
+                                    i18nKey="protocol warning"
+                                    components={{ bold: <strong /> }}
+                                    />}
                                 </Alert>
                             )
                         }
                         {
                             !settingsEdit.apiHost.startsWith('http') && (
                                 <Alert severity="error">
-                                    {t('proxy must use')} <b> {t('http')} </b> {t('or')} <b> {t('https')} </b> {t('proxy api host alert end')}
+                                    {<Trans
+                                    i18nKey="protocol error"
+                                    components={{ bold: <strong /> }}
+                                    />}
                                 </Alert>
                             )
                         }
@@ -197,6 +228,21 @@ export default function SettingWindow(props: Props) {
                         <Typography>{t('model')} & {t('token')} </Typography>
                     </AccordionSummary>
                     <AccordionDetails>
+                        <Alert severity="warning">
+                            {t('settings modify warning')}
+                            {t('please make sure you know what you are doing.')}
+                            {t('click here to')}
+                            <Button onClick={() => setSettingsEdit({
+                                ...settingsEdit,
+                                model: getDefaultSettings().model,
+                                maxContextSize: getDefaultSettings().maxContextSize,
+                                maxTokens: getDefaultSettings().maxTokens,
+                                showModelName: getDefaultSettings().showModelName,
+                                temperature: getDefaultSettings().temperature,
+                            })}>{t('reset')}</Button>
+                            {t('to default values.')}
+                        </Alert>
+
                         <FormControl fullWidth variant="outlined" margin="dense">
                             <InputLabel htmlFor="model-select">{t('model')}</InputLabel>
                             <Select
@@ -211,6 +257,36 @@ export default function SettingWindow(props: Props) {
                                 ))}
                             </Select>
                         </FormControl>
+
+                        <Box sx={{ marginTop: 3, marginBottom: 1 }}>
+                            <Typography id="discrete-slider" gutterBottom>
+                                {t('temperature')}
+                            </Typography>
+                        </Box>
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto' }}>
+                            <Box sx={{ width: '100%' }}>
+                                <Slider
+                                    value={settingsEdit.temperature}
+                                    onChange={handleTemperatureChange}
+                                    aria-labelledby="discrete-slider"
+                                    valueLabelDisplay="auto"
+                                    defaultValue={settingsEdit.temperature}
+                                    step={0.1}
+                                    min={0}
+                                    max={1}
+                                    marks={[
+                                        {
+                                            value: 0.2,
+                                            label: <Chip size='small' icon={<PlaylistAddCheckCircleIcon />} label={t('meticulous')} />
+                                        },
+                                        {
+                                            value: 0.8,
+                                            label: <Chip size='small' icon={<LightbulbCircleIcon />} label={t('creative')} />
+                                        },
+                                    ]}
+                                />
+                            </Box>
+                        </Box>
 
                         <Box sx={{ marginTop: 3, marginBottom: -1 }}>
                             <Typography id="discrete-slider" gutterBottom>
@@ -275,20 +351,6 @@ export default function SettingWindow(props: Props) {
                                 onChange={(e, checked) => setSettingsEdit({ ...settingsEdit, showModelName: checked })}
                             />
                         </FormGroup>
-
-                        <Alert severity="warning">
-                            {t('these settings may cause an openai request error.')}
-                            {t('please make sure you know what you are doing.')}
-                            {t('click here to')}
-                            <Button onClick={() => setSettingsEdit({
-                                ...settingsEdit,
-                                model: getDefaultSettings().model,
-                                maxContextSize: getDefaultSettings().maxContextSize,
-                                maxTokens: getDefaultSettings().maxTokens,
-                                showModelName: getDefaultSettings().showModelName,
-                            })}>{t('reset')}</Button>
-                            {t('to default values.')}
-                        </Alert>
 
                     </AccordionDetails>
                 </Accordion>

@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react'
-import { Settings, createSession, Session, Message } from './types'
+import { useState, useEffect, useRef } from 'react'
+import { Settings, createSession, Session, Message, Config } from './types'
 import * as defaults from './defaults'
-import * as openai from './utils/openai-node'
 import { v4 as uuidv4 } from 'uuid';
 import { ThemeMode } from './theme';
 import * as api from './api'
+import * as remote from './remote'
 import { useTranslation } from "react-i18next";
 
 // setting store
@@ -14,6 +14,7 @@ export function getDefaultSettings(): Settings {
         openaiKey: '',
         apiHost: 'https://api.openai.com',
         model: "gpt-3.5-turbo",
+        temperature: 0.7,
         maxContextSize: "4000",
         maxTokens: "2048",
         showWordCount: false,
@@ -21,11 +22,12 @@ export function getDefaultSettings(): Settings {
         showModelName: false,
         theme: ThemeMode.System,
         language: 'en',
+        fontSize: 13,
     }
 }
 
 export async function readSettings(): Promise<Settings> {
-    const setting: Settings|undefined = await api.readStore('settings')
+    const setting: Settings | undefined = await api.readStore('settings')
     if (!setting) {
         return getDefaultSettings()
     }
@@ -40,8 +42,20 @@ export async function writeSettings(settings: Settings) {
         settings.apiHost = getDefaultSettings().apiHost
     }
     console.log('writeSettings.apiHost', settings.apiHost)
-    openai.setHost(settings.apiHost)
     return api.writeStore('settings', settings)
+}
+
+export async function readConfig(): Promise<Config> {
+    let config: Config | undefined = await api.readStore('configs')
+    if (!config) {
+        config = { uuid: uuidv4() }
+        await api.writeStore('configs', config)
+    }
+    return config;
+}
+
+export async function writeConfig(config: Config) {
+    return api.writeStore('configs', config)
 }
 
 // session store
@@ -52,7 +66,7 @@ export async function readSessions(settings: Settings): Promise<Session[]> {
         return defaults.sessions
     }
     if (sessions.length === 0) {
-        return [createSession(settings.model)]
+        return [createSession()]
     }
     return sessions.map((s: any) => {
         // 兼容旧版本的数据
@@ -73,10 +87,30 @@ export default function useStore() {
     const { i18n } = useTranslation();
 
     const [version, _setVersion] = useState('unknown')
+    const [needCheckUpdate, setNeedCheckUpdate] = useState(false)
+    const updateCheckTimer = useRef<NodeJS.Timeout>()
     useEffect(() => {
-        api.getVersion().then((version: any) => {
+        const handler = async () => {
+            const version = await api.getVersion()
             _setVersion(version)
-        })
+            try {
+                const config = await readConfig()
+                const os = await api.getPlatform()
+                const needUpdate = await remote.checkNeedUpdate(version, os, config)
+                setNeedCheckUpdate(needUpdate)
+            } catch (e) {
+                console.log(e)
+                setNeedCheckUpdate(true)
+            }
+        }
+        handler()
+        updateCheckTimer.current = setInterval(handler, 10 * 60 * 1000)
+        return () => {
+            if (updateCheckTimer.current) {
+                clearInterval(updateCheckTimer.current)
+                updateCheckTimer.current = undefined
+            }
+        }
     }, [])
 
     const [settings, _setSettings] = useState<Settings>(getDefaultSettings())
@@ -96,7 +130,7 @@ export default function useStore() {
         i18n.changeLanguage(settings.language).then();
     }
 
-    const [chatSessions, _setChatSessions] = useState<Session[]>([createSession(settings.model)])
+    const [chatSessions, _setChatSessions] = useState<Session[]>([createSession()])
     const [currentSession, switchCurrentSession] = useState<Session>(chatSessions[0])
     useEffect(() => {
         readSessions(settings).then((sessions: Session[]) => {
@@ -112,7 +146,7 @@ export default function useStore() {
     const deleteChatSession = (target: Session) => {
         const sessions = chatSessions.filter((s) => s.id !== target.id)
         if (sessions.length === 0) {
-            sessions.push(createSession(settings.model))
+            sessions.push(createSession())
         }
         if (target.id === currentSession.id) {
             switchCurrentSession(sessions[0])
@@ -137,7 +171,7 @@ export default function useStore() {
         switchCurrentSession(session)
     }
     const createEmptyChatSession = () => {
-        createChatSession(createSession(settings.model))
+        createChatSession(createSession())
     }
 
     const setMessages = (session: Session, messages: Message[]) => {
@@ -147,10 +181,10 @@ export default function useStore() {
         })
     }
 
-    const [toasts, _setToasts] = useState<{id: string, content: string}[]>([])
+    const [toasts, _setToasts] = useState<{ id: string, content: string }[]>([])
     const addToast = (content: string) => {
         const id = uuidv4()
-        _setToasts([...toasts, {id, content}])
+        _setToasts([...toasts, { id, content }])
     }
     const removeToast = (id: string) => {
         _setToasts(toasts.filter((t) => t.id !== id))
@@ -158,6 +192,7 @@ export default function useStore() {
 
     return {
         version,
+        needCheckUpdate,
 
         settings,
         setSettings,
@@ -169,6 +204,7 @@ export default function useStore() {
         deleteChatSession,
         createEmptyChatSession,
 
+        setSessions,
         currentSession,
         switchCurrentSession,
 

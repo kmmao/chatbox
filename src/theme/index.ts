@@ -14,10 +14,25 @@ const ThemeModeMapPaletteMode: Record<RealThemeMode, PaletteMode> = {
     [ThemeMode.Light]: 'light',
 };
 
-export function fetchThemeDesign(mode: RealThemeMode): ThemeOptions {
+export function fetchThemeDesign(mode: RealThemeMode, fontSize: number): ThemeOptions {
     return {
         palette: {
             mode: ThemeModeMapPaletteMode[mode],
+            ...(mode === ThemeMode.Light
+                ? {
+                }
+                : {
+                    background: {
+                        default: 'rgb(40, 40, 40)',
+                        paper: 'rgb(40, 40, 40)',
+                    },
+                }),
+
+        },
+        typography: {
+            // In Chinese and Japanese the characters are usually larger,
+            // so a smaller fontsize may be appropriate.
+            fontSize,
         },
     };
 }
